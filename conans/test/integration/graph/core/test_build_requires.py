@@ -461,3 +461,106 @@ def test_tool_requires():
     tool2/1.0 from local cache - Cache
     tool3/1.0 from local cache - Cache
     tool4/1.0 from local cache - Cache""" in client.out
+
+
+def test_tool_requires_with_test_and_tool_requires():
+    """Test that tool requires can be listed as build and host requirements"""
+
+    client = TestClient()
+    client.save({"conanfile.py": GenConanfile()})
+    client.run("create . tool1/1.0@")
+    client.run("create . tool2/1.0@")
+    client.run("create . tool3/1.0@")
+    client.run("create . tool4/1.0@")
+
+    consumer = textwrap.dedent("""
+        from conans import ConanFile
+        class Pkg(ConanFile):
+            tool_requires = "tool2/1.0"
+            build_requires = "tool3/1.0"
+
+            def requirements(self):
+                self.requires("tool4/1.0")
+
+            def build_requirements(self):
+                self.tool_requires("tool1/1.0")
+                self.build_requires("tool4/1.0")
+
+            def generate(self):
+                assert len(self.dependencies.host.values()) == 1, tuple(d.ref for d, _ in self.dependencies.build.items())
+                assert len(self.dependencies.build.values()) == 4, tuple(d.ref for d, _ in self.dependencies.build.items())
+    """)
+
+    test = textwrap.dedent("""\
+        from conans import ConanFile
+
+        class Test(ConanFile):
+            def build_requirements(self):
+                self.tool_requires(self.tested_reference_str)
+
+            def test(self):
+                pass
+    """)
+
+    client.save({"conanfile.py": consumer, "test_package/conanfile.py": test})
+    client.run("create . consumer/1.0@ -s:b os=Windows")
+    assert """Requirements
+    consumer/1.0 from local cache - Cache
+    tool4/1.0 from local cache - Cache""" in client.out
+    assert """Build requirements
+    tool1/1.0 from local cache - Cache
+    tool2/1.0 from local cache - Cache
+    tool3/1.0 from local cache - Cache
+    tool4/1.0 from local cache - Cache""" in client.out
+
+
+def test_tool_requires_with_test_and_test_requires():
+    """Test that tool requires can be listed as build and host requirements"""
+
+    client = TestClient()
+    client.save({"conanfile.py": GenConanfile()})
+    client.run("create . tool1/1.0@")
+    client.run("create . tool2/1.0@")
+    client.run("create . tool3/1.0@")
+    client.run("create . tool4/1.0@")
+
+    consumer = textwrap.dedent("""
+        from conans import ConanFile
+        class Pkg(ConanFile):
+            tool_requires = "tool2/1.0"
+            build_requires = "tool3/1.0"
+
+            def requirements(self):
+                self.requires("tool4/1.0")
+
+            def build_requirements(self):
+                self.tool_requires("tool1/1.0")
+                self.build_requires("tool4/1.0")
+
+
+            def generate(self):
+                assert len(self.dependencies.host.values()) == 1, tuple(d.ref for d, _ in self.dependencies.build.items())
+                assert len(self.dependencies.build.values()) == 4, tuple(d.ref for d, _ in self.dependencies.build.items())
+    """)
+
+    test = textwrap.dedent("""\
+        from conans import ConanFile
+
+        class Test(ConanFile):
+            def build_requirements(self):
+                self.test_requires(self.tested_reference_str)
+
+            def test(self):
+                pass
+    """)
+
+    client.save({"conanfile.py": consumer, "test_package/conanfile.py": test})
+    client.run("create . consumer/1.0@ -s:b os=Windows")
+    assert """Requirements
+    consumer/1.0 from local cache - Cache
+    tool4/1.0 from local cache - Cache""" in client.out
+    assert """Build requirements
+    tool1/1.0 from local cache - Cache
+    tool2/1.0 from local cache - Cache
+    tool3/1.0 from local cache - Cache
+    tool4/1.0 from local cache - Cache""" in client.out
